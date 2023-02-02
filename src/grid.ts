@@ -1,7 +1,4 @@
-// For cleaner for loops.
-function range(start: number, end: number) {
-  return [...Array(1 + end - start).keys()].map(v => start + v);
-}
+import {range, UnionFind} from './util';
 
 class Vec2D {
   constructor(readonly x: number, readonly y: number) {}
@@ -15,6 +12,27 @@ class Point extends Vec2D {}
 
 class Rect {
   constructor(readonly tl: Point, readonly br: Point) {}
+
+  translate(o: Vec2D): Rect {
+    return new Rect(
+      new Point(this.tl.x + o.x, this.tl.y + o.y),
+      new Point(this.br.x + o.x, this.br.y + o.y)
+    );
+  }
+}
+
+// One connected component of a graph. May be in a "partially explored" state.
+class Part {
+  // The list of points currently on the perimeter of the part.
+  boundry: Point[];
+
+  // True if there are no more points that could be added to this part.
+  isFinal: boolean;
+
+  constructor(readonly id: number) {
+    this.boundry = [];
+    this.isFinal = false;
+  }
 }
 
 // The steps that can be taken from one cell to an adjacent one.
@@ -32,7 +50,7 @@ class Grid {
   // The index of the connected component to which this cell belongs.
   private part: number[][];
 
-  constructor(private readonly w: number, private readonly h: number) {
+  constructor(readonly w: number, readonly h: number) {
     this.blocked = new Array(h).map(() => new Array(w).fill(false));
     this.part = new Array(h).map(() => new Array(w).fill(1));
   }
@@ -69,13 +87,6 @@ class Grid {
     }
   }
 
-  // Returns true if the given cell is obstructed.
-  isBlocked({x: x, y: y}: Point): boolean {
-    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
-      return true;
-    return false;
-  }
-
   // Returns true if there are no obstructions in the given rectangle.
   canOccupy({tl: {x: x1, y: y1}, br: {x: x2, y: y2}}: Rect) {
     for (const y of range(y1, y2 + 1)) {
@@ -87,41 +98,91 @@ class Grid {
     return true;
   }
 
-  calculatePartitions() {
-    // Reset partitions, using 0 to denote "unvisited".
-    this.part = new Array(this.h).map(() => new Array(this.w).fill(0));
-    let curPart = 1;
+  // Returns true if the given cell is obstructed.
+  private isBlocked({x: x, y: y}: Point): boolean {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
+      return true;
+    return false;
+  }
 
-    // Step through every cell.
-    for (const oY of range(0, this.h)) {
-      for (const oX of range(0, this.w)) {
-        // Already seen.
-        if (this.part[oY][oX] !== 0) continue;
+  //calculatePartitions() {
+  //  // Reset partitions, using 0 to denote "unvisited".
+  //  this.part = new Array(this.h).map(() => new Array(this.w).fill(0));
+  //  let curPart = 1;
 
-        // Perform a breadth-first search starting from this unseen cell.
-        const next: Point[] = [new Point(oX, oY)];
-        let nextIndex = 0;
-        while (nextIndex < next.length) {
-          // Update partition of current cell.
-          const {x: cX, y: cY} = next[nextIndex];
-          this.part[cY][cX] = curPart;
+  //  // Step through every cell.
+  //  for (const oY of range(0, this.h)) {
+  //    for (const oX of range(0, this.w)) {
+  //      // Already seen.
+  //      if (this.part[oY][oX] !== 0) continue;
 
-          // Queue up each adjacent cell.
-          for (const d of DIRS) {
-            const nextPoint: Point = next[nextIndex].add(d);
-            const {x: nX, y: nY} = nextPoint;
+  //      // Perform a breadth-first search starting from this unseen cell.
+  //      const next: Point[] = [new Point(oX, oY)];
+  //      let nextIndex = 0;
+  //      while (nextIndex < next.length) {
+  //        // Update partition of current cell.
+  //        const {x: cX, y: cY} = next[nextIndex];
+  //        this.part[cY][cX] = curPart;
 
-            // Skip visited or un-visitable cells.
-            if (this.isBlocked(nextPoint) || this.part[nY][nX] !== 0) continue;
+  //        // Queue up each adjacent cell.
+  //        for (const d of DIRS) {
+  //          const nextPoint: Point = next[nextIndex].add(d);
+  //          const {x: nX, y: nY} = nextPoint;
 
-            next.push(nextPoint);
-          }
+  //          // Skip visited or un-visitable cells.
+  //          if (this.isBlocked(nextPoint) || this.part[nY][nX] !== 0) continue;
 
-          nextIndex++;
-        }
+  //          next.push(nextPoint);
+  //        }
 
-        curPart++;
-      }
+  //        nextIndex++;
+  //      }
+
+  //      curPart++;
+  //    }
+  //  }
+  //}
+}
+
+// The decomposition of a grid into connected components. Two points are
+// connected if a rectangle of a fixed size can follow a path between them
+// unobstructed.
+class Partition {
+  // The index of the connected component to which this cell belongs.
+  private partIds: number[][];
+
+  // The non-canonical ID to use for a new part.
+  private nextId: number;
+
+  // Information about each known part, keyed by non-canonical ID.
+  private parts: Map<number, Part>;
+
+  // Used to find the canonical ID for a given point.
+  private uf: UnionFind;
+
+  // Assumes non-empty grid.
+  constructor(
+    private readonly grid: Grid,
+    private readonly w: number,
+    private readonly h: number,
+    private readonly cursor: Rect
+  ) {
+    // Use ID 0 to represent "unexplored".
+    this.partIds = new Array(grid.h).map(() => new Array(grid.w).fill(0));
+    this.nextId = 1;
+    this.parts = new Map<number, Part>();
+    this.uf = new UnionFind();
+  }
+
+  inSamePart(a: Point, b: Point): boolean {
+    if (
+      !this.grid.canOccupy(this.cursor.translate(a)) ||
+      !this.grid.canOccupy(this.cursor.translate(b))
+    ) {
+      return false;
     }
+
+    // TODO
+    return true;
   }
 }
