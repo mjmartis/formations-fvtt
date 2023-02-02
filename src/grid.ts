@@ -155,12 +155,7 @@ class Partition {
   private uf: UnionFind;
 
   // Assumes non-empty grid.
-  constructor(
-    private readonly grid: Grid,
-    private readonly w: number,
-    private readonly h: number,
-    private readonly cursor: Rect
-  ) {
+  constructor(private readonly grid: Grid, private readonly cursor: Rect) {
     // Use ID 0 to represent "unexplored".
     this.partIds = new Array(grid.h).map(() => new Array(grid.w).fill(0));
     this.nextId = 1;
