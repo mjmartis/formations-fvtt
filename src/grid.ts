@@ -30,7 +30,7 @@ class Part {
   // The index of the current boundry point.
   private boundryIdx: number;
 
-  constructor(readonly id: number, first: Point) {
+  constructor(first: Point) {
     this.boundry = [first];
     this.boundryIdx = 0;
   }
@@ -136,44 +136,6 @@ class Grid {
       return true;
     return false;
   }
-
-  //calculatePartitions() {
-  //  // Reset partitions, using 0 to denote "unvisited".
-  //  this.part = new Array(this.h).map(() => new Array(this.w).fill(0));
-  //  let curPart = 1;
-
-  //  // Step through every cell.
-  //  for (const oY of range(0, this.h)) {
-  //    for (const oX of range(0, this.w)) {
-  //      // Already seen.
-  //      if (this.part[oY][oX] !== 0) continue;
-
-  //      // Perform a breadth-first search starting from this unseen cell.
-  //      const next: Point[] = [new Point(oX, oY)];
-  //      let nextIndex = 0;
-  //      while (nextIndex < next.length) {
-  //        // Update partition of current cell.
-  //        const {x: cX, y: cY} = next[nextIndex];
-  //        this.part[cY][cX] = curPart;
-
-  //        // Queue up each adjacent cell.
-  //        for (const d of DIRS) {
-  //          const nextPoint: Point = next[nextIndex].add(d);
-  //          const {x: nX, y: nY} = nextPoint;
-
-  //          // Skip visited or un-visitable cells.
-  //          if (this.isBlocked(nextPoint) || this.part[nY][nX] !== 0) continue;
-
-  //          next.push(nextPoint);
-  //        }
-
-  //        nextIndex++;
-  //      }
-
-  //      curPart++;
-  //    }
-  //  }
-  //}
 }
 
 // The decomposition of a grid into connected components. Two points are
@@ -253,7 +215,7 @@ class Partition {
     if (aId === 0) {
       aId = this.nextId++;
       this.partIds[a.y][a.x] = aId;
-      this.parts.set(aId, new Part(aId, a));
+      this.parts.set(aId, new Part(a));
     }
 
     // Iterate through points on the boundry of this part.
