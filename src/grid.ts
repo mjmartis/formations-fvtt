@@ -141,7 +141,7 @@ class Grid {
 // The decomposition of a grid into connected components. Two points are
 // connected if a rectangle of a fixed size can follow a path between them
 // unobstructed.
-class Partition {
+class GridPartition {
   // The index of the connected component to which this cell belongs.
   private partIds: number[][];
 
