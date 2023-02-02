@@ -87,6 +87,13 @@ class Grid {
     }
   }
 
+  // Returns true if the given cell is obstructed.
+  isBlocked({x: x, y: y}: Point): boolean {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
+      return true;
+    return false;
+  }
+
   // Returns true if there are no obstructions in the given rectangle.
   canOccupy({tl: {x: x1, y: y1}, br: {x: x2, y: y2}}: Rect) {
     for (const y of range(y1, y2 + 1)) {
@@ -96,13 +103,6 @@ class Grid {
     }
 
     return true;
-  }
-
-  // Returns true if the given cell is obstructed.
-  private isBlocked({x: x, y: y}: Point): boolean {
-    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
-      return true;
-    return false;
   }
 
   //calculatePartitions() {
@@ -175,6 +175,7 @@ class Partition {
   }
 
   inSamePart(a: Point, b: Point): boolean {
+    // Impossible points aren't in the same part.
     if (
       !this.grid.canOccupy(this.cursor.translate(a)) ||
       !this.grid.canOccupy(this.cursor.translate(b))
@@ -182,7 +183,43 @@ class Partition {
       return false;
     }
 
-    // TODO
-    return true;
+    // Make part A the visited part if there is one.
+    let aId: number = this.canonId(a);
+    let bId: number = this.canonId(b);
+    if (aId === 0) {
+      [a, b] = [b, a];
+      [aId, bId] = [bId, aId];
+    }
+
+    // If we've finished searching one of the components, we would have found
+    // the other point.
+    if (
+      (aId !== 0 && this.parts.get(aId)!.isFinal) ||
+      (bId !== 0 && this.parts.get(bId)!.isFinal)
+    ) {
+      return aId === bId;
+    }
+
+    // Neither of the parts exist yet; create one.
+    if (aId === 0) {
+      aId = this.nextId++;
+      this.parts.set(aId, new Part(aId));
+    }
+
+    // Part A is now guaranteed to exist and be un-final.
+    this.flood(a, b);
+
+    return this.canonId(a) === this.canonId(b);
   }
+
+  // Returns the canonical part ID associated with the given point.
+  private canonId(p: Point): number {
+    const {x: x, y: y}: Point = p;
+    if (this.grid.isBlocked(p)) return 0;
+
+    return this.uf.find(this.partIds[y][x]);
+  }
+
+  // TODO
+  private flood(a: Point, b: Point): void {}
 }
