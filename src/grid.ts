@@ -177,22 +177,21 @@ class GridPartition {
     const aId: number = this.canonId(a);
     const bId: number = this.canonId(b);
 
+    // Shortcut: we might already be aware that the two points are in the same
+    // part.
+    if (aId !== 0 && aId === bId) return true;
+
     // If we've finished searching one of the parts, we would have found the
     // other point.
     if (
       (aId !== 0 && this.parts.get(aId)!.isFinal()) ||
       (bId !== 0 && this.parts.get(bId)!.isFinal())
     ) {
-      return aId === bId;
+      return false;
     }
-
-    // Shortcut: we might already be aware that the two points are in the same
-    // part.
-    if (aId !== 0 && aId === bId) return true;
 
     // See if the parts containing the two points are actually the same.
     this.flood(a, b);
-
     return this.canonId(a) === this.canonId(b);
   }
 
@@ -216,13 +215,21 @@ class GridPartition {
     // Iterate through points on the boundry of this part.
     const part: Part = this.parts.get(aId)!;
     while (!part.isFinal()) {
-      // Add to our part or combine parts.
       const cur: Point = part.nextBoundryPoint();
       const curId: number = this.canonId(cur);
+
+      // Add to our part or combine parts.
       if (curId !== 0 && curId !== aId) {
         part.subsume(this.parts.get(curId)!);
+
+        // Remove old data before IDs potentially change.
+        this.parts.delete(curId);
+        this.parts.delete(aId);
+
+        // Grab the new canonical representation of part A.
         this.uf.union(aId, curId);
         aId = this.canonId(a);
+        this.parts.set(aId, part);
       }
       this.partIds[cur.y][cur.x] = aId;
 
