@@ -5,6 +5,32 @@ export function range(start: number, end: number) {
   return [...Array(1 + end - start).keys()].map(v => start + v);
 }
 
+export class Queue<T> {
+  private elems: T[];
+  private i: number;
+
+  constructor() {
+    this.elems = [];
+    this.i = 0;
+  }
+
+  empty(): boolean {
+    return this.i >= this.elems.length;
+  }
+
+  push(e: T): void {
+    this.elems.push(e);
+  }
+
+  extend(q: Queue<T>): void {
+    this.elems.push(...q.elems.slice(q.i, q.elems.length));
+  }
+
+  next(): T {
+    return this.elems[this.i++];
+  }
+}
+
 export class UnionFind {
   private parents: Map<number, number>;
   private ranks: Map<number, number>;

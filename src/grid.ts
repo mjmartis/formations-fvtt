@@ -1,4 +1,4 @@
-import {range, UnionFind} from './util';
+import {range, Queue, UnionFind} from './util';
 
 class Vec2D {
   constructor(readonly x: number, readonly y: number) {}
@@ -18,37 +18,6 @@ class Rect {
       new Point(this.tl.x + o.x, this.tl.y + o.y),
       new Point(this.br.x + o.x, this.br.y + o.y)
     );
-  }
-}
-
-// One connected component of a graph. May be in a "partially explored" state.
-class Part {
-  // The list of points currently unvisited and adjacent to the perimeter of
-  // the part.
-  private boundry: Point[];
-
-  // The index of the current boundry point.
-  private boundryIdx: number;
-
-  constructor(first: Point) {
-    this.boundry = [first];
-    this.boundryIdx = 0;
-  }
-
-  isFinal(): boolean {
-    return this.boundryIdx >= this.boundry.length;
-  }
-
-  addBoundryPoint(p: Point): void {
-    this.boundry.push(p);
-  }
-
-  nextBoundryPoint(): Point {
-    return this.boundry[this.boundryIdx++];
-  }
-
-  subsume(p: Part): void {
-    this.boundry.push(...p.boundry.slice(p.boundryIdx, p.boundry.length));
   }
 }
 
@@ -148,8 +117,8 @@ class GridPartition {
   // The non-canonical ID to use for a new part.
   private nextId: number;
 
-  // Information about each known part, keyed by non-canonical ID.
-  private parts: Map<number, Part>;
+  // List of boundry points for each known part, keyed by non-canonical ID.
+  private parts: Map<number, Queue<Point>>;
 
   // Used to find the canonical ID for a given point.
   private uf: UnionFind;
@@ -159,7 +128,7 @@ class GridPartition {
     // Use ID 0 to represent "unexplored".
     this.partIds = new Array(grid.h).map(() => new Array(grid.w).fill(0));
     this.nextId = 1;
-    this.parts = new Map<number, Part>();
+    this.parts = new Map<number, Queue<Point>>();
     this.uf = new UnionFind();
   }
 
@@ -184,8 +153,8 @@ class GridPartition {
     // If we've finished searching one of the parts, we would have found the
     // other point.
     if (
-      (aId !== 0 && this.parts.get(aId)!.isFinal()) ||
-      (bId !== 0 && this.parts.get(bId)!.isFinal())
+      (aId !== 0 && this.parts.get(aId)!.empty()) ||
+      (bId !== 0 && this.parts.get(bId)!.empty())
     ) {
       return false;
     }
@@ -209,18 +178,19 @@ class GridPartition {
     if (aId === 0) {
       aId = this.nextId++;
       this.partIds[a.y][a.x] = aId;
-      this.parts.set(aId, new Part(a));
+      this.parts.set(aId, new Queue<Point>());
+      this.parts.get(aId)!.push(a);
     }
 
     // Iterate through points on the boundry of this part.
-    const part: Part = this.parts.get(aId)!;
-    while (!part.isFinal()) {
-      const cur: Point = part.nextBoundryPoint();
+    const part: Queue<Point> = this.parts.get(aId)!;
+    while (!part.empty()) {
+      const cur: Point = part.next();
       const curId: number = this.canonId(cur);
 
       // Add to our part or combine parts.
       if (curId !== 0 && curId !== aId) {
-        part.subsume(this.parts.get(curId)!);
+        part.extend(this.parts.get(curId)!);
 
         // Remove old data before IDs potentially change.
         this.parts.delete(curId);
@@ -238,7 +208,7 @@ class GridPartition {
 
       // Eventually examine neighbours.
       for (const p of this.grid.adjPoints(this.cursor.translate(cur))) {
-        if (this.canonId(p) !== aId) part.addBoundryPoint(p);
+        if (this.canonId(p) !== aId) part.push(p);
       }
     }
   }
