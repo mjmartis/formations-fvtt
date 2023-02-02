@@ -23,27 +23,44 @@ class Rect {
 
 // One connected component of a graph. May be in a "partially explored" state.
 class Part {
-  // The list of points currently on the perimeter of the part.
-  boundry: Point[];
+  // The list of points currently unvisited and adjacent to the perimeter of
+  // the part.
+  private boundry: Point[];
 
-  // True if there are no more points that could be added to this part.
-  isFinal: boolean;
+  // The index of the current boundry point.
+  private boundryIdx: number;
 
-  constructor(readonly id: number) {
-    this.boundry = [];
-    this.isFinal = false;
+  constructor(readonly id: number, first: Point) {
+    this.boundry = [first];
+    this.boundryIdx = 0;
+  }
+
+  isFinal(): boolean {
+    return this.boundryIdx >= this.boundry.length;
+  }
+
+  addBoundryPoint(p: Point): void {
+    this.boundry.push(p);
+  }
+
+  nextBoundryPoint(): Point {
+    return this.boundry[this.boundryIdx++];
+  }
+
+  subsume(p: Part): void {
+    this.boundry.push(...p.boundry.slice(p.boundryIdx, p.boundry.length));
   }
 }
 
-// The steps that can be taken from one cell to an adjacent one.
-const DIRS: Vec2D[] = [
-  new Vec2D(0, -1),
-  new Vec2D(-1, 0),
-  new Vec2D(1, 0),
-  new Vec2D(0, 1),
-];
-
 class Grid {
+  // The steps that can be taken from one cell to an adjacent one.
+  private static readonly DIRS: Vec2D[] = [
+    new Vec2D(0, -1),
+    new Vec2D(-1, 0),
+    new Vec2D(1, 0),
+    new Vec2D(0, 1),
+  ];
+
   // True if the cell is impassable.
   private blocked: boolean[][];
 
@@ -87,13 +104,6 @@ class Grid {
     }
   }
 
-  // Returns true if the given cell is obstructed.
-  isBlocked({x: x, y: y}: Point): boolean {
-    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
-      return true;
-    return false;
-  }
-
   // Returns true if there are no obstructions in the given rectangle.
   canOccupy({tl: {x: x1, y: y1}, br: {x: x2, y: y2}}: Rect) {
     for (const y of range(y1, y2 + 1)) {
@@ -103,6 +113,28 @@ class Grid {
     }
 
     return true;
+  }
+
+  // Returns the points that the top left of the given rectangle can step to
+  // without obstruction.
+  adjPoints(r: Rect): Point[] {
+    if (!this.canOccupy(r)) return [];
+
+    const ps: Point[] = [];
+    for (const d of Grid.DIRS) {
+      if (this.canOccupy(r.translate(d))) {
+        ps.push(r.tl.add(d));
+      }
+    }
+
+    return ps;
+  }
+
+  // Returns true if the given cell is obstructed.
+  private isBlocked({x: x, y: y}: Point): boolean {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h || this.blocked[y][x])
+      return true;
+    return false;
   }
 
   //calculatePartitions() {
@@ -174,6 +206,8 @@ class Partition {
     this.uf = new UnionFind();
   }
 
+  // Returns true if the two points are in the same connected component for a
+  // rectangle of the given size.
   inSamePart(a: Point, b: Point): boolean {
     // Impossible points aren't in the same part.
     if (
@@ -183,43 +217,65 @@ class Partition {
       return false;
     }
 
-    // Make part A the visited part if there is one.
-    let aId: number = this.canonId(a);
-    let bId: number = this.canonId(b);
-    if (aId === 0) {
-      [a, b] = [b, a];
-      [aId, bId] = [bId, aId];
-    }
+    const aId: number = this.canonId(a);
+    const bId: number = this.canonId(b);
 
-    // If we've finished searching one of the components, we would have found
-    // the other point.
+    // If we've finished searching one of the parts, we would have found the
+    // other point.
     if (
-      (aId !== 0 && this.parts.get(aId)!.isFinal) ||
-      (bId !== 0 && this.parts.get(bId)!.isFinal)
+      (aId !== 0 && this.parts.get(aId)!.isFinal()) ||
+      (bId !== 0 && this.parts.get(bId)!.isFinal())
     ) {
       return aId === bId;
     }
 
-    // Neither of the parts exist yet; create one.
-    if (aId === 0) {
-      aId = this.nextId++;
-      this.parts.set(aId, new Part(aId));
-    }
+    // Shortcut: we might already be aware that the two points are in the same
+    // part.
+    if (aId !== 0 && aId === bId) return true;
 
-    // Part A is now guaranteed to exist and be un-final.
+    // See if the parts containing the two points are actually the same.
     this.flood(a, b);
 
     return this.canonId(a) === this.canonId(b);
   }
 
-  // Returns the canonical part ID associated with the given point.
+  // Returns the canonical part ID associated with the given point. Assumes
+  // point is valid.
   private canonId(p: Point): number {
-    const {x: x, y: y}: Point = p;
-    if (this.grid.isBlocked(p)) return 0;
-
-    return this.uf.find(this.partIds[y][x]);
+    return this.uf.find(this.partIds[p.y][p.x]);
   }
 
-  // TODO
-  private flood(a: Point, b: Point): void {}
+  // Searches the part containing point A until it is joined with the part
+  // containing point B or is completely exhausted.
+  private flood(a: Point, b: Point): void {
+    // Populate the origin part if necessary.
+    let aId = this.canonId(a);
+    if (aId === 0) {
+      aId = this.nextId++;
+      this.partIds[a.y][a.x] = aId;
+      this.parts.set(aId, new Part(aId, a));
+    }
+
+    // Iterate through points on the boundry of this part.
+    const part: Part = this.parts.get(aId)!;
+    while (!part.isFinal()) {
+      // Add to our part or combine parts.
+      const cur: Point = part.nextBoundryPoint();
+      const curId: number = this.canonId(cur);
+      if (curId !== 0 && curId !== aId) {
+        part.subsume(this.parts.get(curId)!);
+        this.uf.union(aId, curId);
+        aId = this.canonId(a);
+      }
+      this.partIds[cur.y][cur.x] = aId;
+
+      // We might have found part B now.
+      if (this.canonId(a) === this.canonId(b)) return;
+
+      // Eventually examine neighbours.
+      for (const p of this.grid.adjPoints(this.cursor.translate(cur))) {
+        if (this.canonId(p) !== aId) part.addBoundryPoint(p);
+      }
+    }
+  }
 }
