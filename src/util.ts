@@ -2,7 +2,7 @@
 
 // For cleaner for loops.
 export function range(start: number, end: number) {
-  return [...Array(1 + end - start).keys()].map(v => start + v);
+  return [...Array(end - start).keys()].map(v => start + v);
 }
 
 export class Queue<T> {

@@ -22,12 +22,12 @@ export class Rect {
 }
 
 export class Grid {
-  // The steps that can be taken from one cell to an adjacent one.
+  // The steps that can be taken from one cell to an adjacent one. Clockwise.
   private static readonly DIRS: Vec2D[] = [
     new Vec2D(0, -1),
-    new Vec2D(-1, 0),
     new Vec2D(1, 0),
     new Vec2D(0, 1),
+    new Vec2D(-1, 0),
   ];
 
   // True if the cell is impassable.
@@ -71,8 +71,8 @@ export class Grid {
 
   // Returns true if there are no obstructions in the given rectangle.
   canOccupy({tl: {x: x1, y: y1}, br: {x: x2, y: y2}}: Rect) {
-    for (const y of range(y1, y2 + 1)) {
-      for (const x of range(x1, x2 + 1)) {
+    for (const y of range(y1, y2)) {
+      for (const x of range(x1, x2)) {
         if (this.isBlocked(new Point(x, y))) return false;
       }
     }
@@ -201,13 +201,14 @@ export class GridPartition {
       }
       this.partIds[cur.y][cur.x] = aId;
 
-      // We might have found part B now.
-      if (this.canonId(a) === this.canonId(b)) return;
-
-      // Eventually examine neighbours.
+      // Queue neighbours to visit.
       for (const p of this.grid.adjPoints(this.cursor.translate(cur))) {
         if (this.canonId(p) !== aId) part.push(p);
       }
+
+      // We might have found part B now. Do this at the end so that we have
+      // always added all known boundry points to each part.
+      if (this.canonId(a) === this.canonId(b)) return;
     }
   }
 }
