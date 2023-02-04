@@ -1,6 +1,6 @@
 import {range, Queue, UnionFind} from './util';
 
-class Vec2D {
+export class Vec2D {
   constructor(readonly x: number, readonly y: number) {}
 
   add(o: Vec2D): Vec2D {
@@ -8,9 +8,9 @@ class Vec2D {
   }
 }
 
-class Point extends Vec2D {}
+export class Point extends Vec2D {}
 
-class Rect {
+export class Rect {
   constructor(readonly tl: Point, readonly br: Point) {}
 
   translate(o: Vec2D): Rect {
@@ -21,7 +21,7 @@ class Rect {
   }
 }
 
-class Grid {
+export class Grid {
   // The steps that can be taken from one cell to an adjacent one.
   private static readonly DIRS: Vec2D[] = [
     new Vec2D(0, -1),
@@ -33,12 +33,8 @@ class Grid {
   // True if the cell is impassable.
   private blocked: boolean[][];
 
-  // The index of the connected component to which this cell belongs.
-  private part: number[][];
-
   constructor(readonly w: number, readonly h: number) {
-    this.blocked = new Array(h).map(() => new Array(w).fill(false));
-    this.part = new Array(h).map(() => new Array(w).fill(1));
+    this.blocked = new Array(h).fill(false).map(() => new Array(w).fill(false));
   }
 
   // Marks all cells in the line between p1 and p2 blocked. Uses the Bresenham
@@ -110,7 +106,7 @@ class Grid {
 // The decomposition of a grid into connected components. Two points are
 // connected if a rectangle of a fixed size can follow a path between them
 // unobstructed.
-class GridPartition {
+export class GridPartition {
   // The index of the connected component to which this cell belongs.
   private partIds: number[][];
 
@@ -126,7 +122,9 @@ class GridPartition {
   // Assumes non-empty grid.
   constructor(private readonly grid: Grid, private readonly cursor: Rect) {
     // Use ID 0 to represent "unexplored".
-    this.partIds = new Array(grid.h).map(() => new Array(grid.w).fill(0));
+    this.partIds = new Array(grid.h)
+      .fill(0)
+      .map(() => new Array(grid.w).fill(0));
     this.nextId = 1;
     this.parts = new Map<number, Queue<Point>>();
     this.uf = new UnionFind();
