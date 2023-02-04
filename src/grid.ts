@@ -171,11 +171,10 @@ export class GridPartition {
   // Searches the part containing point A until it is joined with the part
   // containing point B or is completely exhausted.
   private flood(a: Point, b: Point): void {
-    // Populate the origin part if necessary.
+    // Populate a new part if necessary.
     let aId = this.canonId(a);
     if (aId === 0) {
       aId = this.nextId++;
-      this.partIds[a.y][a.x] = aId;
       this.parts.set(aId, new Queue<Point>());
       this.parts.get(aId)!.push(a);
     }
@@ -185,6 +184,11 @@ export class GridPartition {
     while (!part.empty()) {
       const cur: Point = part.next();
       const curId: number = this.canonId(cur);
+
+      // We've already proccessed this part.
+      if (curId === aId) {
+        continue;
+      }
 
       // Add to our part or combine parts.
       if (curId !== 0 && curId !== aId) {

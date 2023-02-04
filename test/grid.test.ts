@@ -261,3 +261,9 @@ test('large rect handled', () => {
   ].join('\n');
   expect(prettyPartitionString(p)).toEqual(expected);
 });
+
+//test('speed', () => {
+//  const g = new Grid(2048, 2048);
+//  const p = new GridPartition(g, newRect(0, 0, 1, 1));
+//  expect(p.inSamePart(new Point(0, 0), new Point(2047, 2047))).toEqual(true);
+//});
